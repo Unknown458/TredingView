@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "TradingView Alert Creator",
+  "version": "1.0.0",
+  "description": "Creates alerts in TradingView automatically",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAhf2HH7Yx+O3Rd8H5Fj+OCDgHV5G5Oj5K5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://*.tradingview.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://*.tradingview.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "externally_connectable": {
+    "matches": ["*://*.tradingview.com/*"],
+    "ids": ["*"]
+  },
+  "web_accessible_resources": [{
+    "resources": ["popup.html"],
+    "matches": ["<all_urls>"]
+  }]
+} 
