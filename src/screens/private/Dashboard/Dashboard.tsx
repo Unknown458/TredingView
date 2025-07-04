@@ -28,7 +28,7 @@ import {
   TableHead,
   TableRow,
   Chip,
-  Divider,
+
 } from '@mui/material';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import TimerIcon from '@mui/icons-material/Timer';
@@ -42,7 +42,7 @@ import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import * as XLSX from 'xlsx';
 import './Dashboard.scss';
-import { generatePineScript, SignalType, AlertFrequency } from '../../../utils/pineScriptGenerator';
+import { generatePineScript,  AlertFrequency } from '../../../utils/pineScriptGenerator';
 
 // Interface for TradingView alerts
 interface TradingViewAlert {
@@ -83,9 +83,9 @@ function Dashboard() {
   const [intervalError, setIntervalError] = useState<string>('');
   const [generatedScript, setGeneratedScript] = useState<string>('');
   const [copySuccess, setCopySuccess] = useState<boolean>(false);
-  const [consecutiveErrors, setConsecutiveErrors] = useState<number>(0);
-  const [isUpdating, setIsUpdating] = useState<boolean>(false);
-  const MAX_CONSECUTIVE_ERRORS = 3;
+  // const [consecutiveErrors, setConsecutiveErrors] = useState<number>(0);
+  
+  // const MAX_CONSECUTIVE_ERRORS = 3;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const timeoutRef = useRef<number>();
 
@@ -482,33 +482,33 @@ function Dashboard() {
     }
   };
 
-  const handleRotationError = () => {
-    setConsecutiveErrors(prev => {
-      const newCount = prev + 1;
-      if (newCount >= MAX_CONSECUTIVE_ERRORS) {
-        setIsAutoRotating(false);
-        setError('Rotation stopped due to multiple errors. Please click Reset Rotation to try again.');
-        return 0;
-      }
-      return newCount;
-    });
-  };
+  // const handleRotationError = () => {
+  //   setConsecutiveErrors(prev => {
+  //     const newCount = prev + 1;
+  //     if (newCount >= MAX_CONSECUTIVE_ERRORS) {
+  //       setIsAutoRotating(false);
+  //       setError('Rotation stopped due to multiple errors. Please click Reset Rotation to try again.');
+  //       return 0;
+  //     }
+  //     return newCount;
+  //   });
+  // };
 
-  const handleRotationSuccess = () => {
-    if (consecutiveErrors > 0) {
-      setConsecutiveErrors(0);
-    }
-  };
+  // const handleRotationSuccess = () => {
+  //   if (consecutiveErrors > 0) {
+  //     setConsecutiveErrors(0);
+  //   }
+  // };
 
   const resetRotation = () => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
-    setConsecutiveErrors(0);
+
     setCurrentPairIndex(0);
     setIsAutoRotating(true);
     setError('');
-    setIsUpdating(false);
+  
   };
 
   // Add a new effect to monitor connection errors
