@@ -78,23 +78,25 @@ async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'POST') {
     try {
-      // Parse the webhook payload from TradingView
-      let alertData = req.body;
-      
-      console.log('Received TradingView Alert:', alertData);
-
-      // Handle raw body if needed
-      if (typeof alertData === 'undefined') {
+      let alertMessage = '';
+      // Accept both plain text and JSON
+      if (typeof req.body === 'string') {
+        // Plain text (TradingView default)
+        alertMessage = req.body;
+      } else if (typeof req.body === 'object' && req.body !== null) {
+        // JSON
+        alertMessage = req.body.message || req.body.text || '';
+      } else if (typeof req.body === 'undefined') {
+        // Handle raw body if needed
         const buffers: Buffer[] = [];
         for await (const chunk of req) {
           buffers.push(chunk);
         }
         const data = Buffer.concat(buffers).toString();
-        alertData = JSON.parse(data || '{}');
+        alertMessage = data;
       }
       
-      // Parse the alert message (assuming it comes in the format from Pine Script)
-      const alertMessage = alertData.message || alertData.text || '';
+      console.log('Received TradingView Alert:', alertMessage);
       
       // Parse the structured alert message
       const parsedAlert = parseAlertMessage(alertMessage);
@@ -122,7 +124,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
         res.status(400).json({
           success: false,
           message: 'Invalid alert format',
-          receivedData: alertData
+          receivedData: alertMessage
         });
       }
     } catch (error) {
