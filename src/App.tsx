@@ -41,33 +41,33 @@ export const getTime = (): Date => {
 function App() {
   const [isTimeInitialized, setIsTimeInitialized] = useState(false);
 
-  useEffect(() => {
-    if (import.meta.env.PROD) {
-      const disableDevTools = (e: KeyboardEvent) => {
-        if (
-          e.key === "F12" ||
-          (e.ctrlKey && e.shiftKey && e.key === "I") ||
-          (e.ctrlKey && e.shiftKey && e.key === "J") ||
-          (e.ctrlKey && e.shiftKey && e.key === "C") ||
-          (e.ctrlKey && e.key === "U")
-        ) {
-          e.preventDefault();
-        }
-      };
+  // useEffect(() => {
+  //   if (import.meta.env.PROD) {
+  //     const disableDevTools = (e: KeyboardEvent) => {
+  //       if (
+  //         e.key === "F12" ||
+  //         (e.ctrlKey && e.shiftKey && e.key === "I") ||
+  //         (e.ctrlKey && e.shiftKey && e.key === "J") ||
+  //         (e.ctrlKey && e.shiftKey && e.key === "C") ||
+  //         (e.ctrlKey && e.key === "U")
+  //       ) {
+  //         e.preventDefault();
+  //       }
+  //     };
 
-      const disableRightClick = (e: MouseEvent) => {
-        e.preventDefault();
-      };
+  //     const disableRightClick = (e: MouseEvent) => {
+  //       e.preventDefault();
+  //     };
 
-      document.addEventListener("keydown", disableDevTools);
-      document.addEventListener("contextmenu", disableRightClick);
+  //     document.addEventListener("keydown", disableDevTools);
+  //     document.addEventListener("contextmenu", disableRightClick);
 
-      return () => {
-        document.removeEventListener("keydown", disableDevTools);
-        document.removeEventListener("contextmenu", disableRightClick);
-      };
-    }
-  }, []);
+  //     return () => {
+  //       document.removeEventListener("keydown", disableDevTools);
+  //       document.removeEventListener("contextmenu", disableRightClick);
+  //     };
+  //   }
+  // }, []);
 
   useEffect(() => {
     setupAxiosInterceptors();
