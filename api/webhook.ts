@@ -33,10 +33,18 @@ export default async function handler(
   if (req.method === 'POST') {
     try {
       // Parse the webhook payload from TradingView
-      const alertData = req.body;
+      let alertData = req.body;
       
       console.log('Received TradingView Alert:', alertData);
 
+      if (typeof alertData === 'undefined') {
+        const buffers: Buffer[] = [];
+        for await (const chunk of req) {
+          buffers.push(chunk);
+        }
+        const data = Buffer.concat(buffers).toString();
+        alertData = JSON.parse(data || '{}');
+      }
       // Parse the alert message (assuming it comes in the format from Pine Script)
       const alertMessage = alertData.message || alertData.text || '';
       
