@@ -1,4 +1,4 @@
-import { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 // Interface for TradingView webhook payload
 interface TradingViewAlert {
@@ -14,91 +14,6 @@ interface TradingViewAlert {
 
 // In-memory storage for alerts (in production, use a database)
 let alerts: TradingViewAlert[] = [];
-
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
-  // Set CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  // Handle preflight OPTIONS request
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-
-  if (req.method === 'POST') {
-    try {
-      // Parse the webhook payload from TradingView
-      let alertData = req.body;
-      
-      console.log('Received TradingView Alert:', alertData);
-
-      if (typeof alertData === 'undefined') {
-        const buffers: Buffer[] = [];
-        for await (const chunk of req) {
-          buffers.push(chunk);
-        }
-        const data = Buffer.concat(buffers).toString();
-        alertData = JSON.parse(data || '{}');
-      }
-      // Parse the alert message (assuming it comes in the format from Pine Script)
-      const alertMessage = alertData.message || alertData.text || '';
-      
-      // Parse the structured alert message
-      const parsedAlert = parseAlertMessage(alertMessage);
-      
-      if (parsedAlert) {
-        // Add timestamp
-        parsedAlert.timestamp = new Date().toISOString();
-        
-        // Store the alert (add to beginning of array for latest first)
-        alerts.unshift(parsedAlert);
-        
-        // Keep only last 100 alerts to prevent memory issues
-        if (alerts.length > 100) {
-          alerts = alerts.slice(0, 100);
-        }
-        
-        console.log('Alert stored successfully:', parsedAlert);
-        
-        res.status(200).json({
-          success: true,
-          message: 'Alert received and stored',
-          alert: parsedAlert
-        });
-      } else {
-        res.status(400).json({
-          success: false,
-          message: 'Invalid alert format',
-          receivedData: alertData
-        });
-      }
-    } catch (error) {
-      console.error('Error processing webhook:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Internal server error',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  } else if (req.method === 'GET') {
-    // Return stored alerts for the frontend
-    res.status(200).json({
-      success: true,
-      alerts: alerts,
-      count: alerts.length
-    });
-  } else {
-    res.status(405).json({
-      success: false,
-      message: 'Method not allowed'
-    });
-  }
-}
 
 // Function to parse the alert message from Pine Script
 function parseAlertMessage(message: string): TradingViewAlert | null {
@@ -145,5 +60,89 @@ function parseAlertMessage(message: string): TradingViewAlert | null {
   } catch (error) {
     console.error('Error parsing alert message:', error);
     return null;
+  }
+}
+
+// Main handler function
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  // Handle preflight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method === 'POST') {
+    try {
+      // Parse the webhook payload from TradingView
+      let alertData = req.body;
+      
+      console.log('Received TradingView Alert:', alertData);
+
+      // Handle raw body if needed
+      if (typeof alertData === 'undefined') {
+        const buffers: Buffer[] = [];
+        for await (const chunk of req) {
+          buffers.push(chunk);
+        }
+        const data = Buffer.concat(buffers).toString();
+        alertData = JSON.parse(data || '{}');
+      }
+      
+      // Parse the alert message (assuming it comes in the format from Pine Script)
+      const alertMessage = alertData.message || alertData.text || '';
+      
+      // Parse the structured alert message
+      const parsedAlert = parseAlertMessage(alertMessage);
+      
+      if (parsedAlert) {
+        // Add timestamp
+        parsedAlert.timestamp = new Date().toISOString();
+        
+        // Store the alert (add to beginning of array for latest first)
+        alerts.unshift(parsedAlert);
+        
+        // Keep only last 100 alerts to prevent memory issues
+        if (alerts.length > 100) {
+          alerts = alerts.slice(0, 100);
+        }
+        
+        console.log('Alert stored successfully:', parsedAlert);
+        
+        return res.status(200).json({
+          success: true,
+          message: 'Alert received and stored',
+          alert: parsedAlert
+        });
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid alert format',
+          receivedData: alertData
+        });
+      }
+    } catch (error) {
+      console.error('Error processing webhook:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  } else if (req.method === 'GET') {
+    // Return stored alerts for the frontend
+    return res.status(200).json({
+      success: true,
+      alerts: alerts,
+      count: alerts.length
+    });
+  } else {
+    return res.status(405).json({
+      success: false,
+      message: 'Method not allowed'
+    });
   }
 }
