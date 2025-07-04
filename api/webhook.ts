@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { VercelRequest, VercelResponse } from '@vercel/node';
 
 // Interface for TradingView webhook payload
 interface TradingViewAlert {
@@ -64,7 +64,7 @@ function parseAlertMessage(message: string): TradingViewAlert | null {
 }
 
 // Main handler function
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -72,7 +72,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    res.status(200).end();
+    return;
   }
 
   if (req.method === 'POST') {
@@ -112,13 +113,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         
         console.log('Alert stored successfully:', parsedAlert);
         
-        return res.status(200).json({
+        res.status(200).json({
           success: true,
           message: 'Alert received and stored',
           alert: parsedAlert
         });
       } else {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: 'Invalid alert format',
           receivedData: alertData
@@ -126,7 +127,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     } catch (error) {
       console.error('Error processing webhook:', error);
-      return res.status(500).json({
+      res.status(500).json({
         success: false,
         message: 'Internal server error',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -134,15 +135,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   } else if (req.method === 'GET') {
     // Return stored alerts for the frontend
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       alerts: alerts,
       count: alerts.length
     });
   } else {
-    return res.status(405).json({
+    res.status(405).json({
       success: false,
       message: 'Method not allowed'
     });
   }
 }
+
+// CommonJS export
+module.exports = handler;
+export default handler;
