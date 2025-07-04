@@ -5,7 +5,7 @@ import './Header.scss';
 // import { format } from 'date-fns';
 
 import { memo, useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+
 
 import {
       Logout,  PersonOutline,
@@ -23,12 +23,10 @@ import { useApp } from '../../contexts/App/App';
 import { useAuth } from '../../contexts/Auth/Auth';
 
 import Alert from '../Alert/Alert';
-import { AlertInterface, AlertStates } from '../Alert/Alert.types';
+import { AlertInterface } from '../Alert/Alert.types';
 import { HeaderInterface } from './Header.types';
-import { getInvoiceByInvoiceNo } from '../../services/invoice/invoice';
-import { InvoiceInterface } from '../../services/invoice/invoice.types';
 
-import RouterPath from '../../app/routerPath';
+
 // -------------------------------------------------------------------------------------------
 
 // const getMenuTooltip = (navigationState: string, windowWidth: number) => {
@@ -57,13 +55,12 @@ import RouterPath from '../../app/routerPath';
 
 const Header = memo(({ navigationState }: HeaderInterface) => {
 
-	const navigate = useNavigate();
+	
 	
 	const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
-	const [invoices, setInvoices] = useState<InvoiceInterface[]>([]);
-	const [isLoading, setIsLoading] = useState(false);
 
+	
 
 	const { title } = useApp();
 	const { handleLogout } = useAuth();
@@ -121,13 +118,7 @@ const Header = memo(({ navigationState }: HeaderInterface) => {
 
 
 
-	const handleOpenAlertDialog = (state: AlertStates, label: string) => {
-		setAlertDialog({
-			state: state,
-			label: label,
-			isActive: true,
-		});
-	};
+
 
 	const handleCloseAlertDialog = () => {
 		setAlertDialog({
@@ -142,63 +133,10 @@ const Header = memo(({ navigationState }: HeaderInterface) => {
 
 
 
-	const handleGetInvoiceDetails = useCallback(async () => {
-		if (!searchInput) {
-		  handleOpenAlertDialog('warning', 'Please enter Invoice Number');
-		  return;
-		}
-	  
-		setIsLoading(true);
-		try {
-		  const response = await getInvoiceByInvoiceNo(Number(searchInput));
-		  console.log("Response from API:", response);
-	  
-		
-		  if (response && typeof response !== "boolean" && response.data && response.data.data) {
-			const data = response.data.data;
-	  
-			if (data.length > 0) {
-			  const invoiceData = data[0]; 
-	  
-			
-			  const invoiceExists = invoices.some(
-				(item) => item.invoiceNo === invoiceData.invoiceNo
-			  );
-	  
-			  if (!invoiceExists) {
-			
-				setInvoices(prev => [invoiceData, ...prev]);
-			  }
-	  
-			  setSearchInput('');
-			  
-			  navigate(RouterPath.Invoice, {
-				state: {
-				  invoiceDetails: invoiceData,
-				},
-			  });
-			} else {
-			  handleOpenAlertDialog('warning', 'No invoice found');
-			}
-		  } else {
-			handleLogout(); 
-		  }
-		} catch (error) {
-		  console.error("Error fetching invoice:", error);
-		  handleOpenAlertDialog('error', 'Failed to fetch invoice details');
-		} finally {
-		  setIsLoading(false);
-		}
-	  }, [searchInput, invoices, navigate]);
+	
 
 
 
-
-	const onEnter = (event: any) => {
-		if (event.key === 'Enter') {
-		  handleGetInvoiceDetails();
-		}
-	  };
 
 
 
@@ -262,8 +200,8 @@ const Header = memo(({ navigationState }: HeaderInterface) => {
 									onChange={(event) =>
 										setSearchInput(event.target.value)
 									}
-									onKeyDown={onEnter}
-									disabled={isLoading}
+								
+									
 								/>
 								<div
 									data-component='header'
@@ -272,7 +210,7 @@ const Header = memo(({ navigationState }: HeaderInterface) => {
 									<Tooltip title='Search Invoice Number'>
 										<IconButton
 											color='primary'
-											onClick={handleGetInvoiceDetails}
+											
 										>
 											
 												<Search />

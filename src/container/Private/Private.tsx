@@ -10,7 +10,7 @@ import RouterPath from '../../app/routerPath';
 import Header from '../../components/Header/Header';
 // import Navigation from '../../components/Navigation/Navigation';
 import { NavigationStateType } from '../../components/Navigation/Navigation.types';
-import { ApiProvider } from '../../contexts/Api/Api';
+// import { ApiProvider } from '../../contexts/Api/Api';
 import { useAuth } from '../../contexts/Auth/Auth';
 
 // -------------------------------------------------------------------------------------------
@@ -120,7 +120,7 @@ const Private = memo(() => {
 	}
 
 	return (
-		<ApiProvider>
+
 			<div
 				data-component='private'
 				className='container'
@@ -157,7 +157,7 @@ const Private = memo(() => {
 					</div>
 				</div>
 			</div>
-		</ApiProvider>
+	
 	);
 });
 

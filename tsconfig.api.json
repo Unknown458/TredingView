@@ -9,11 +9,13 @@
       "skipLibCheck": true,
       "forceConsistentCasingInFileNames": true,
       "declaration": false,
-      "outDir": "../dist/api",
+      "outDir": "../.vercel/output/functions",
       "rootDir": ".",
       "resolveJsonModule": true,
       "types": ["node"],
-      "lib": ["ES2020"]
+      "lib": ["ES2020"],
+      "isolatedModules": true,
+      "noEmit": false
     },
     "include": [
       "**/*.ts"
