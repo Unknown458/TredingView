@@ -144,4 +144,4 @@ function parseAlertMessage(message) {
   }
 }
 
-module.exports = { default: handler };
+export default handler;
