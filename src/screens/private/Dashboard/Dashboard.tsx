@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { 
-  Box, 
-  Button, 
-  Container, 
-  Typography, 
+import {
+  Box,
+  Button,
+  Container,
+  Typography,
   Paper,
   CircularProgress,
   Alert,
@@ -18,19 +18,49 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  Checkbox,
+  ListItemText,
+  OutlinedInput,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Chip,
+  Divider,
 } from '@mui/material';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import TimerIcon from '@mui/icons-material/Timer';
 import LinkIcon from '@mui/icons-material/Link';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
-
+import RefreshIcon from '@mui/icons-material/Refresh';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import TrendingDownIcon from '@mui/icons-material/TrendingDown';
+import NotificationsIcon from '@mui/icons-material/Notifications';
 import * as XLSX from 'xlsx';
 import './Dashboard.scss';
 import { generatePineScript, SignalType, AlertFrequency } from '../../../utils/pineScriptGenerator';
 
+// Interface for TradingView alerts
+interface TradingViewAlert {
+  symbol: string;
+  signalType: string;
+  price: string;
+  atr: string;
+  rsi: string;
+  longStop: string;
+  shortStop: string;
+  timestamp: string;
+}
 
+interface AlertsResponse {
+  success: boolean;
+  alerts: TradingViewAlert[];
+  count: number;
+}
 
 function Dashboard() {
   const [tradingPairs, setTradingPairs] = useState<string[]>([]);
@@ -53,11 +83,21 @@ function Dashboard() {
   const [intervalError, setIntervalError] = useState<string>('');
   const [generatedScript, setGeneratedScript] = useState<string>('');
   const [copySuccess, setCopySuccess] = useState<boolean>(false);
+  const [consecutiveErrors, setConsecutiveErrors] = useState<number>(0);
+  const [isUpdating, setIsUpdating] = useState<boolean>(false);
+  const MAX_CONSECUTIVE_ERRORS = 3;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const timeoutRef = useRef<number>();
 
   // Add new state for signal type and alert frequency
-  const [selectedSignalType, setSelectedSignalType] = useState<SignalType>('buy_only');
+  const [selectedSignalTypes, setSelectedSignalTypes] = useState<string[]>(['buy']);
   const [selectedAlertFrequency, setAlertFrequency] = useState<AlertFrequency>('once_per_bar');
+
+  // TradingView alerts state
+  const [alerts, setAlerts] = useState<TradingViewAlert[]>([]);
+  const [alertsLoading, setAlertsLoading] = useState<boolean>(false);
+  const [alertsError, setAlertsError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const [chartHistory, setChartHistory] = useState<string[]>(() => {
     const savedHistory = localStorage.getItem('tradingview_chart_history');
@@ -67,6 +107,61 @@ function Dashboard() {
   const baseUrl = 'https://in.tradingview.com/chart/';
   const theme = useTheme();
 
+  // Fetch alerts from webhook API
+  const fetchAlerts = async () => {
+    setAlertsLoading(true);
+    setAlertsError(null);
+
+    try {
+      // Use local webhook server in development, production API in production
+      const apiUrl = import.meta.env.DEV
+        ? 'http://localhost:3001/api/webhook'  // Local webhook server
+        : '/api/webhook';  // Production Vercel API
+
+      const response = await fetch(apiUrl);
+      const data: AlertsResponse = await response.json();
+
+      if (data.success) {
+        setAlerts(data.alerts);
+        setLastUpdated(new Date());
+      } else {
+        setAlertsError('Failed to fetch alerts');
+      }
+    } catch (err) {
+      setAlertsError('Error connecting to webhook API');
+      console.error('Error fetching alerts:', err);
+    } finally {
+      setAlertsLoading(false);
+    }
+  };
+
+  // Get signal color based on signal type
+  const getSignalColor = (signalType: string) => {
+    const type = signalType.toLowerCase();
+    if (type.includes('buy') || type.includes('long')) {
+      return 'success';
+    } else if (type.includes('sell') || type.includes('short')) {
+      return 'error';
+    }
+    return 'default';
+  };
+
+  // Get signal icon
+  const getSignalIcon = (signalType: string) => {
+    const type = signalType.toLowerCase();
+    if (type.includes('buy') || type.includes('long')) {
+      return <TrendingUpIcon />;
+    } else if (type.includes('sell') || type.includes('short')) {
+      return <TrendingDownIcon />;
+    }
+    return undefined;
+  };
+
+  // Format timestamp
+  const formatTimestamp = (timestamp: string) => {
+    return new Date(timestamp).toLocaleString();
+  };
+
   const extractChartId = (input: string): string => {
     if (input.includes('tradingview.com/chart/')) {
       const match = input.match(/\/chart\/([^/?]+)/);
@@ -75,12 +170,36 @@ function Dashboard() {
     return input || '4FqTLhAp';
   };
 
-  const updateChartUrl = (pair: string) => {
+  const updateChartUrl = async (pair: string): Promise<boolean> => {
     console.log('Updating chart URL for pair:', pair);
     const fullUrl = `${baseUrl}${chartId}/?symbol=BINANCE%3A${pair}`;
+    
     if (chartWindow && !chartWindow.closed) {
-      console.log('Updating visible chart window URL');
-      chartWindow.location.href = fullUrl;
+      try {
+        // Instead of trying to access the window directly, just update the URL
+        chartWindow.location.replace(fullUrl);
+        
+        // Simple delay to allow the page to start loading
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        return true;
+      } catch (error) {
+        // If we get an error, try to open a new window
+        console.log('Error updating existing window, opening new one');
+        const newWindow = window.open(fullUrl, 'TradingViewChart');
+        if (newWindow) {
+          setChartWindow(newWindow);
+          return true;
+        }
+        return false;
+      }
+    } else {
+      // If window is closed or null, try to open a new one
+      const newWindow = window.open(fullUrl, 'TradingViewChart');
+      if (newWindow) {
+        setChartWindow(newWindow);
+        return true;
+      }
+      return false;
     }
   };
 
@@ -145,7 +264,7 @@ function Dashboard() {
 
             // Generate Pine Script with selected options
             try {
-              const script = generatePineScript(pairs, selectedSignalType, selectedAlertFrequency);
+              const script = generatePineScript(pairs, selectedSignalTypes, selectedAlertFrequency);
               setGeneratedScript(script);
             } catch (err) {
               console.error('Error generating Pine Script:', err);
@@ -175,17 +294,26 @@ function Dashboard() {
       return;
     }
 
+    // Reset any existing state
+    resetToDefault();
+
     const firstPair = tradingPairs[0];
     const fullUrl = `${baseUrl}${chartId}/?symbol=BINANCE%3A${firstPair}`;
     
-    const newWindow = window.open(fullUrl, 'TradingViewChart');
-    if (newWindow) {
-      setChartWindow(newWindow);
-      setIsTabClosed(false);
-      setIsAutoRotating(true);
-    } else {
-      setError('Failed to open chart window. Please allow popups.');
-      setIsAutoRotating(false);
+    try {
+      const newWindow = window.open(fullUrl, 'TradingViewChart');
+      if (newWindow) {
+        setChartWindow(newWindow);
+        setIsTabClosed(false);
+        setIsAutoRotating(true);
+        setCurrentPairIndex(0);
+        setError('');
+      } else {
+        setError('Failed to open chart window. Please allow popups in your browser settings.');
+      }
+    } catch (error) {
+      console.error('Error opening TradingView:', error);
+      setError('Failed to open TradingView. Please check your internet connection and try again.');
     }
   };
 
@@ -203,49 +331,76 @@ function Dashboard() {
   };
 
   useEffect(() => {
-    if (tradingPairs.length > 0 && isAutoRotating && !isTabClosed && chartWindow && !chartWindow.closed) {
+    if (tradingPairs.length > 0 && isAutoRotating && !isTabClosed) {
       console.log('Setting up interval for auto-rotation with interval:', rotationInterval, 'seconds');
-      const interval = setInterval(() => {
-        setCurrentPairIndex((prevIndex) => {
-          const newIndex = prevIndex + 1 >= tradingPairs.length ? 0 : prevIndex + 1;
-          console.log('Switching to pair index:', newIndex, 'pair:', tradingPairs[newIndex]);
+      
+      let isRotating = false;
+      
+      const rotateChart = async () => {
+        if (isRotating) return;
+        isRotating = true;
+        
+        try {
+          const nextIndex = currentPairIndex + 1 >= tradingPairs.length ? 0 : currentPairIndex + 1;
+          console.log('Switching to pair index:', nextIndex, 'pair:', tradingPairs[nextIndex]);
           
-          updateChartUrl(tradingPairs[newIndex]);
+          const success = await updateChartUrl(tradingPairs[nextIndex]);
           
-          return newIndex;
-        });
-      }, rotationInterval * 1000); // Convert seconds to milliseconds
+          if (success) {
+            setCurrentPairIndex(nextIndex);
+            setError(''); // Clear any existing errors
+          }
+        } catch (error) {
+          console.error('Error in rotation:', error);
+        } finally {
+          isRotating = false;
+        }
+      };
+
+      // Start the rotation
+      const interval = setInterval(rotateChart, rotationInterval * 1000);
 
       return () => {
-        console.log('Clearing auto-rotation interval');
         clearInterval(interval);
       };
     }
-  }, [tradingPairs, chartId, isAutoRotating, isTabClosed, chartWindow, rotationInterval]);
+  }, [tradingPairs, chartId, isAutoRotating, isTabClosed, rotationInterval, currentPairIndex]);
 
-  // Check if window is closed
+  // Remove the focus event handler as it's causing unnecessary resets
   useEffect(() => {
     const checkWindow = setInterval(() => {
       if (chartWindow && chartWindow.closed) {
-        console.log('Tab was closed, resetting all states...');
+        console.log('Chart window was closed by user');
+        // Reset all states when user closes the window
         setChartWindow(null);
         setIsTabClosed(true);
         setIsAutoRotating(false);
-        // Reset all states when tab is closed
-        setTradingPairs([]);
         setCurrentPairIndex(0);
-        setError('');
-        // Clear the file input
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-          console.log('File input cleared');
-        }
-        console.log('All states have been reset to default');
+        setError('Chart window was closed. Click "Open TradingView" to start again.');
+        
+        // Clear the interval since we're no longer rotating
+        clearInterval(checkWindow);
       }
-    }, 1000);
+    }, 2000);
 
     return () => clearInterval(checkWindow);
   }, [chartWindow]);
+
+  const resetToDefault = () => {
+    // Reset all states to default
+    if (chartWindow && !chartWindow.closed) {
+      try {
+        chartWindow.close();
+      } catch (error) {
+        console.log('Error closing window:', error);
+      }
+    }
+    setChartWindow(null);
+    setIsTabClosed(true);
+    setIsAutoRotating(false);
+    setCurrentPairIndex(0);
+    setError('');
+  };
 
   const handleIntervalChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
@@ -299,11 +454,12 @@ function Dashboard() {
   // };
 
   const handleSignalTypeChange = (event: any) => {
-    setSelectedSignalType(event.target.value as SignalType);
+    const value = event.target.value as string[];
+    setSelectedSignalTypes(value);
     if (tradingPairs.length > 0) {
       // Regenerate script with new settings
       try {
-        const script = generatePineScript(tradingPairs, event.target.value, selectedAlertFrequency);
+        const script = generatePineScript(tradingPairs, value, selectedAlertFrequency);
         setGeneratedScript(script);
       } catch (err) {
         console.error('Error generating Pine Script:', err);
@@ -317,7 +473,7 @@ function Dashboard() {
     if (tradingPairs.length > 0) {
       // Regenerate script with new settings
       try {
-        const script = generatePineScript(tradingPairs, selectedSignalType, event.target.value);
+        const script = generatePineScript(tradingPairs, selectedSignalTypes, event.target.value);
         setGeneratedScript(script);
       } catch (err) {
         console.error('Error generating Pine Script:', err);
@@ -325,6 +481,51 @@ function Dashboard() {
       }
     }
   };
+
+  const handleRotationError = () => {
+    setConsecutiveErrors(prev => {
+      const newCount = prev + 1;
+      if (newCount >= MAX_CONSECUTIVE_ERRORS) {
+        setIsAutoRotating(false);
+        setError('Rotation stopped due to multiple errors. Please click Reset Rotation to try again.');
+        return 0;
+      }
+      return newCount;
+    });
+  };
+
+  const handleRotationSuccess = () => {
+    if (consecutiveErrors > 0) {
+      setConsecutiveErrors(0);
+    }
+  };
+
+  const resetRotation = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    setConsecutiveErrors(0);
+    setCurrentPairIndex(0);
+    setIsAutoRotating(true);
+    setError('');
+    setIsUpdating(false);
+  };
+
+  // Add a new effect to monitor connection errors
+  useEffect(() => {
+    if (error && error.includes('Failed to load resource')) {
+      setError('Unable to connect to TradingView. Please check your internet connection.');
+      setIsAutoRotating(false);
+    }
+  }, [error]);
+
+  // Auto-fetch alerts on component mount and every 30 seconds
+  useEffect(() => {
+    fetchAlerts();
+
+    const interval = setInterval(fetchAlerts, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <Container maxWidth="lg" className="app-container">
@@ -413,11 +614,11 @@ function Dashboard() {
                   }}
                   sx={{
                     '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': {
-                      '-webkit-appearance': 'none',
+                      WebkitAppearance: 'none',
                       margin: 0
                     },
                     '& input[type=number]': {
-                      '-moz-appearance': 'textfield'
+                      MozAppearance: 'textfield'
                     }
                   }}
                 />
@@ -438,18 +639,30 @@ function Dashboard() {
                 <Grid container spacing={2}>
                   <Grid item xs={12} md={6}>
                     <FormControl fullWidth>
-                      <InputLabel>Signal Type</InputLabel>
+                      <InputLabel>Signal Types</InputLabel>
                       <Select
-                        value={selectedSignalType}
-                        label="Signal Type"
+                        multiple
+                        value={selectedSignalTypes}
                         onChange={handleSignalTypeChange}
+                        input={<OutlinedInput label="Signal Types" />}
+                        renderValue={(selected) => (selected as string[]).join(', ')}
                       >
-                        <MenuItem value="buy_only">Buy Signal Alert</MenuItem>
-                        <MenuItem value="sell_only">Sell Signal Alert</MenuItem>
-                        <MenuItem value="long_only">Long Signal Alert</MenuItem>
-                        <MenuItem value="short_only">Short Signal Alert</MenuItem>
-                        <MenuItem value="buy_and_sell">Buy & Sell Signal Alert</MenuItem>
-                        <MenuItem value="long_and_short">Long & Short Signal Alert</MenuItem>
+                        <MenuItem value="buy">
+                          <Checkbox checked={selectedSignalTypes.indexOf('buy') > -1} />
+                          <ListItemText primary="Buy Signals" />
+                        </MenuItem>
+                        <MenuItem value="sell">
+                          <Checkbox checked={selectedSignalTypes.indexOf('sell') > -1} />
+                          <ListItemText primary="Sell Signals" />
+                        </MenuItem>
+                        <MenuItem value="long">
+                          <Checkbox checked={selectedSignalTypes.indexOf('long') > -1} />
+                          <ListItemText primary="Long Signals" />
+                        </MenuItem>
+                        <MenuItem value="short">
+                          <Checkbox checked={selectedSignalTypes.indexOf('short') > -1} />
+                          <ListItemText primary="Short Signals" />
+                        </MenuItem>
                       </Select>
                     </FormControl>
                   </Grid>
@@ -580,26 +793,43 @@ function Dashboard() {
                       </Grid>
 
                       <Grid item xs={12}>
-                        <Button
-                          variant="contained"
-                          color="primary"
-                          startIcon={<OpenInNewIcon />}
-                          onClick={handleOpenTradingView}
-                          sx={{
-                            mt: 2,
-                            py: 1.5,
-                            px: 4,
-                            borderRadius: 2,
-                            textTransform: 'none',
-                            fontSize: '1.1rem',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                            '&:hover': {
-                              boxShadow: '0 6px 16px rgba(0,0,0,0.2)'
-                            }
-                          }}
-                        >
-                          Open TradingView
-                        </Button>
+                        <Box sx={{ display: 'flex', gap: 2 }}>
+                          <Button
+                            variant="contained"
+                            color="primary"
+                            startIcon={<OpenInNewIcon />}
+                            onClick={handleOpenTradingView}
+                            sx={{
+                              py: 1.5,
+                              px: 4,
+                              borderRadius: 2,
+                              textTransform: 'none',
+                              fontSize: '1.1rem',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                              '&:hover': {
+                                boxShadow: '0 6px 16px rgba(0,0,0,0.2)'
+                              }
+                            }}
+                          >
+                            Open TradingView
+                          </Button>
+
+                          <Button
+                            variant="outlined"
+                            onClick={resetRotation}
+                            disabled={!tradingPairs.length || !chartWindow || chartWindow.closed}
+                            startIcon={<RefreshIcon />}
+                            sx={{
+                              py: 1.5,
+                              px: 4,
+                              borderRadius: 2,
+                              textTransform: 'none',
+                              fontSize: '1.1rem'
+                            }}
+                          >
+                            Reset Rotation
+                          </Button>
+                        </Box>
                       </Grid>
                     </Grid>
                   </CardContent>
@@ -652,6 +882,129 @@ function Dashboard() {
                   </Card>
                 </Grid>
               )}
+
+              {/* TradingView Alerts Section */}
+              <Grid item xs={12}>
+                <Card
+                  sx={{
+                    mt: 3,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                    borderRadius: 2,
+                    border: '1px solid rgba(0,0,0,0.05)'
+                  }}
+                >
+                  <CardContent>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <NotificationsIcon sx={{ mr: 1, color: theme.palette.primary.main }} />
+                        <Typography variant="h6" sx={{ fontWeight: 500 }}>
+                          TradingView Alerts
+                        </Typography>
+                      </Box>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={alertsLoading ? <CircularProgress size={16} /> : <RefreshIcon />}
+                        onClick={fetchAlerts}
+                        disabled={alertsLoading}
+                        sx={{ textTransform: 'none' }}
+                      >
+                        Refresh
+                      </Button>
+                    </Box>
+
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        Total Alerts: {alerts.length}
+                        {lastUpdated && ` • Last Updated: ${formatTimestamp(lastUpdated.toISOString())}`}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                        Webhook URL: {import.meta.env.DEV ? 'http://localhost:3001/api/webhook' : 'https://treding-view.vercel.app/api/webhook'}
+                      </Typography>
+                    </Box>
+
+                    {alertsError && (
+                      <Alert severity="error" sx={{ mb: 2 }}>
+                        {alertsError}
+                      </Alert>
+                    )}
+
+                    {alerts.length === 0 ? (
+                      <Box sx={{ textAlign: 'center', py: 4 }}>
+                        <Typography variant="h6" color="text.secondary">
+                          No alerts received yet
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                          Configure your TradingView alerts to send webhooks to the URL above
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
+                        <Table stickyHeader size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Time</TableCell>
+                              <TableCell>Symbol</TableCell>
+                              <TableCell>Signal</TableCell>
+                              <TableCell align="right">Price</TableCell>
+                              <TableCell align="right">RSI</TableCell>
+                              <TableCell align="right">ATR</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {alerts.slice(0, 10).map((alert, index) => (
+                              <TableRow key={index} hover>
+                                <TableCell>
+                                  <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
+                                    {formatTimestamp(alert.timestamp)}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="body2" fontWeight="bold">
+                                    {alert.symbol}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Chip
+                                    icon={getSignalIcon(alert.signalType)}
+                                    label={alert.signalType}
+                                    color={getSignalColor(alert.signalType) as any}
+                                    size="small"
+                                    sx={{ fontSize: '0.7rem' }}
+                                  />
+                                </TableCell>
+                                <TableCell align="right">
+                                  <Typography variant="body2" fontFamily="monospace">
+                                    {alert.price}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell align="right">
+                                  <Typography variant="body2" fontFamily="monospace">
+                                    {alert.rsi}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell align="right">
+                                  <Typography variant="body2" fontFamily="monospace">
+                                    {alert.atr}
+                                  </Typography>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    )}
+
+                    {alerts.length > 10 && (
+                      <Box sx={{ mt: 2, textAlign: 'center' }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Showing latest 10 alerts out of {alerts.length} total
+                        </Typography>
+                      </Box>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
             </>
           )}
         </Grid>
